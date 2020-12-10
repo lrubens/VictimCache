@@ -87,6 +87,7 @@ D4_EXT int level_fetch[3][MAX_LEV];
 D4_EXT int level_walloc[3][MAX_LEV];
 D4_EXT int level_wback[3][MAX_LEV];
 D4_EXT int level_prefetch_abortpercent[3][MAX_LEV];
+D4_EXT unsigned int vc_size;
 int level_prefetch_distance[3][MAX_LEV];
 
 /*
@@ -106,6 +107,7 @@ int level_prefetch_distance[3][MAX_LEV];
 #define  DEFSTR_wback "a"
 #define DEFVAL_informat 'D'
 #define  DEFSTR_informat "D"
+#define DEFVAL_vcsize 4
 
 double skipcount;
 double flushcount;
@@ -139,127 +141,132 @@ extern void unspec (int, int, char *, void *, char *);
 /* Initialize argument table to specify acceptable arguments */
 struct arglist args[] = {
 	{ "-help", 0, NULL, NULL,
-	  NULL,
-	  "Print this help message",
-	  match_0arg, val_help, NULL,
-	  NULL, help_0arg },
+		NULL,
+		"Print this help message",
+		match_0arg, val_help, NULL,
+		NULL, help_0arg },
 	{ "-copyright", 0, NULL, NULL,
-	  NULL,
-	  "Give details on copyright and lack of warranty",
-	  match_0arg, val_helpcr, NULL,
-	  NULL, help_0arg },
+		NULL,
+		"Give details on copyright and lack of warranty",
+		match_0arg, val_helpcr, NULL,
+		NULL, help_0arg },
 	{ "-contact", 0, NULL, NULL,
-	  NULL,
-	  "Where to get the latest version or contact the authors",
-	  match_0arg, val_helpw, NULL,
-	  NULL, help_0arg },
+		NULL,
+		"Where to get the latest version or contact the authors",
+		match_0arg, val_helpw, NULL,
+		NULL, help_0arg },
 #if !D4CUSTOM
 	{ "-dineroIII", 0, NULL, NULL,
-	  NULL,
-	  "Explain replacements for Dinero III options",
-	  match_0arg, val_helpd3, NULL,
-	  NULL, help_0arg },
+		NULL,
+		"Explain replacements for Dinero III options",
+		match_0arg, val_helpd3, NULL,
+		NULL, help_0arg },
 	{ "-custom", 2, &customname, NULL,
-	  NULL,
-	  "Generate and run custom simulator named F",
-	  match_1arg, val_string, custom_custom,
-	  NULL, help_string },
+		NULL,
+		"Generate and run custom simulator named F",
+		match_1arg, val_string, custom_custom,
+		NULL, help_string },
 #endif
 	{ "size", 7, &level_size[0][0], NULL,
-	  "level_size",
-	  "Size",
-	  CUST_MATCH(pmatch_1arg), pval_scale_pow2, CUST_X(pcustom_uint),
-	  psummary_luint, CUST_X(phelp_scale_pow2) },
+		"level_size",
+		"Size",
+		CUST_MATCH(pmatch_1arg), pval_scale_pow2, CUST_X(pcustom_uint),
+		psummary_luint, CUST_X(phelp_scale_pow2) },
 	{ "bsize", 7, &level_blocksize[0][0], NULL,
-	  "level_blocksize",
-	  "Block size",
-	  CUST_MATCH(pmatch_1arg), pval_scale_pow2, CUST_X(pcustom_uint),
-	  psummary_luint, CUST_X(phelp_scale_pow2) },
+		"level_blocksize",
+		"Block size",
+		CUST_MATCH(pmatch_1arg), pval_scale_pow2, CUST_X(pcustom_uint),
+		psummary_luint, CUST_X(phelp_scale_pow2) },
 	{ "sbsize", 7, &level_subblocksize[0][0], "same as block size",
-	  "level_subblocksize",
-	  "Sub-block size",
-	  CUST_MATCH(pmatch_1arg), pval_scale_pow2, CUST_X(pcustom_uint),
-	  psummary_luint, CUST_X(phelp_scale_pow2) },
+		"level_subblocksize",
+		"Sub-block size",
+		CUST_MATCH(pmatch_1arg), pval_scale_pow2, CUST_X(pcustom_uint),
+		psummary_luint, CUST_X(phelp_scale_pow2) },
 	{ "assoc", 7, &level_assoc[0][0], DEFSTR_assoc,
-	  "level_assoc",
-	  "Associativity",
-	  CUST_MATCH(pmatch_1arg), pval_uint, CUST_X(pcustom_uint),
-	  psummary_uint, CUST_X(phelp_uint) },
+		"level_assoc",
+		"Associativity",
+		CUST_MATCH(pmatch_1arg), pval_uint, CUST_X(pcustom_uint),
+		psummary_uint, CUST_X(phelp_uint) },
 	{ "repl", 7, &level_replacement[0][0], DEFSTR_repl,
-	  "level_replacement",
-	  "Replacement policy",
-	  CUST_MATCH(pmatch_1arg), pval_char, CUST_X(pcustom_char),
-	  psummary_char, CUST_X(phelp_replacement) },
+		"level_replacement",
+		"Replacement policy",
+		CUST_MATCH(pmatch_1arg), pval_char, CUST_X(pcustom_char),
+		psummary_char, CUST_X(phelp_replacement) },
 	{ "fetch", 7, &level_fetch[0][0], DEFSTR_fetch,
-	  "level_fetch",
-	  "Fetch policy",
-	  CUST_MATCH(pmatch_1arg), pval_char, CUST_X(pcustom_char),
-	  psummary_char, CUST_X(phelp_fetch) },
+		"level_fetch",
+		"Fetch policy",
+		CUST_MATCH(pmatch_1arg), pval_char, CUST_X(pcustom_char),
+		psummary_char, CUST_X(phelp_fetch) },
 	{ "pfdist", 7, &level_prefetch_distance[0][0], "1",
-	  NULL,
-	  "Prefetch distance (in sub-blocks)",
-	  pmatch_1arg, pval_uint, NULL,
-	  psummary_uint, CUST_X(phelp_uint) },
+		NULL,
+		"Prefetch distance (in sub-blocks)",
+		pmatch_1arg, pval_uint, NULL,
+		psummary_uint, CUST_X(phelp_uint) },
 	{ "pfabort", 7, &level_prefetch_abortpercent[0][0], "0",
-	  "level_prefetch_abortpercent",
-	  "Prefetch abort percentage (0-100)",
-	  CUST_MATCH(pmatch_1arg), pval_uint, CUST_X(pcustom_uint),
-	  psummary_uint, CUST_X(phelp_uint) },
+		"level_prefetch_abortpercent",
+		"Prefetch abort percentage (0-100)",
+		CUST_MATCH(pmatch_1arg), pval_uint, CUST_X(pcustom_uint),
+		psummary_uint, CUST_X(phelp_uint) },
 	{ "walloc", 7, &level_walloc[0][0], DEFSTR_walloc,
-	  "level_walloc",
-	  "Write allocate policy",
-	  CUST_MATCH(pmatch_1arg), pval_char, CUST_X(pcustom_char),
-	  psummary_char, CUST_X(phelp_walloc) },
+		"level_walloc",
+		"Write allocate policy",
+		CUST_MATCH(pmatch_1arg), pval_char, CUST_X(pcustom_char),
+		psummary_char, CUST_X(phelp_walloc) },
 	{ "wback", 7, &level_wback[0][0], DEFSTR_wback,
-	  "level_wback",
-	  "Write back policy",
-	  CUST_MATCH(pmatch_1arg), pval_char, CUST_X(pcustom_char),
-	  psummary_char, CUST_X(phelp_wback) },
+		"level_wback",
+		"Write back policy",
+		CUST_MATCH(pmatch_1arg), pval_char, CUST_X(pcustom_char),
+		psummary_char, CUST_X(phelp_wback) },
 	{ "ccc", 5, &level_doccc[0][0], NULL,
-	  "level_doccc",
-	  "Compulsory/Capacity/Conflict miss statistics",
-	  CUST_MATCH(pmatch_0arg), pval_0arg, CUST_X(pcustom_0arg),
-	  psummary_0arg, CUST_X(phelp_0arg) },
+		"level_doccc",
+		"Compulsory/Capacity/Conflict miss statistics",
+		CUST_MATCH(pmatch_0arg), pval_0arg, CUST_X(pcustom_0arg),
+		psummary_0arg, CUST_X(phelp_0arg) },
 	{ "-skipcount", 2, &skipcount, NULL,
-	  NULL,
-	  "Skip initial U references",
-	  match_1arg, val_scale_uintd, NULL,
-	  summary_uintd, help_scale_uintd },
+		NULL,
+		"Skip initial U references",
+		match_1arg, val_scale_uintd, NULL,
+		summary_uintd, help_scale_uintd },
 	{ "-flushcount", 2, &flushcount, NULL,
-	  NULL,
-	  "Flush cache every U references",
-	  match_1arg, val_scale_uintd, NULL,
-	  summary_uintd, help_scale_uintd },
+		NULL,
+		"Flush cache every U references",
+		match_1arg, val_scale_uintd, NULL,
+		summary_uintd, help_scale_uintd },
+	{ "-vc-size", 2, &vc_size, NULL,
+		NULL,
+		"Victim cache size",
+		match_1arg, val_scale_uintd, NULL,
+		summary_uintd, help_scale_uintd },
 	{ "-maxcount", 2, &maxcount, NULL,
-	  NULL,
-	  "Stop simulation after U references",
-	  match_1arg, val_scale_uintd, NULL,
-	  summary_uintd, help_scale_uintd },
+		NULL,
+		"Stop simulation after U references",
+		match_1arg, val_scale_uintd, NULL,
+		summary_uintd, help_scale_uintd },
 	{ "-stat-interval", 2, &stat_interval, NULL,
-	  NULL,
-	  "Show statistics after every U references",
-	  match_1arg, val_scale_uintd, NULL,
-	  summary_uintd, help_scale_uintd },
+		NULL,
+		"Show statistics after every U references",
+		match_1arg, val_scale_uintd, NULL,
+		summary_uintd, help_scale_uintd },
 	{ "-informat", 2, &informat, DEFSTR_informat,
-	  NULL,
-	  "Input trace format",
-	  match_1arg, val_char, NULL,
-	  summary_char, help_informat },
+		NULL,
+		"Input trace format",
+		match_1arg, val_char, NULL,
+		summary_char, help_informat },
 	{ "-on-trigger", 2, &on_trigger, NULL,
-	  NULL,
-	  "Trigger address to start simulation",
-	  match_1arg, val_addr, NULL,
-	  summary_addr, help_addr },
+		NULL,
+		"Trigger address to start simulation",
+		match_1arg, val_addr, NULL,
+		summary_addr, help_addr },
 	{ "-off-trigger", 2, &off_trigger, NULL,
-	  NULL,
-	  "Trigger address to stop simulation",
-	  match_1arg, val_addr, NULL,
-	  summary_addr, help_addr },
+		NULL,
+		"Trigger address to stop simulation",
+		match_1arg, val_addr, NULL,
+		summary_addr, help_addr },
 	{ "-stat-idcombine", 2, &stat_idcombine, NULL,
-	  NULL,
-	  "Combine I&D cache stats",
-	  match_0arg, val_0arg, NULL,
-	  summary_0arg, help_0arg },
+		NULL,
+		"Combine I&D cache stats",
+		match_0arg, val_0arg, NULL,
+		summary_0arg, help_0arg },
 	{ NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 int nargs = sizeof(args) / sizeof(args[0]);
@@ -359,6 +366,7 @@ verify_options()
 {
 	int lev, idu;
 
+
 	/*
 	 * Allow some default values
 	 *	subblocksize (default to blocksize)
@@ -376,7 +384,7 @@ verify_options()
 			if (level_size[idu][lev]!=0 && level_fetch[idu][lev]==0)
 				level_fetch[idu][lev] = DEFVAL_fetch;
 			if (level_size[idu][lev]!=0 &&
-			    level_fetch[idu][lev]!='d' && level_prefetch_distance[idu][lev]==0)
+					level_fetch[idu][lev]!='d' && level_prefetch_distance[idu][lev]==0)
 				level_prefetch_distance[idu][lev] = 1;
 			if (idu!=1 && level_size[idu][lev]!=0 && level_walloc[idu][lev]==0)
 				level_walloc[idu][lev] = DEFVAL_walloc;
@@ -390,19 +398,19 @@ verify_options()
 	 */
 	if (maxlevel <= 0)
 		shorthelp ("cache size and block size must be specified,\n"
-			   "e.g.: -l1-isize 16k -l1-dsize 8192 "
+				 "e.g.: -l1-isize 16k -l1-dsize 8192 "
 				 "-l1-ibsize 32 -l1-dbsize 16\n");
 	for (lev = 0;  lev < maxlevel;  lev++) {
 		int nerr = 0, nidu = 0;
 		for (idu = 0;  idu < 3;  idu++) {
 			int nparams = (level_blocksize[idu][lev]!=0) +
-				      (level_subblocksize[idu][lev]!=0) +
-				      (level_size[idu][lev]!=0) +
-				      (level_assoc[idu][lev]!=0) +
-				      (level_replacement[idu][lev]!=0) +
-				      (level_fetch[idu][lev]!=0) +
-				      (level_walloc[idu][lev]!=0) +	/* only for u or d */
-				      (level_wback[idu][lev]!=0);	/* only for u or d */
+							(level_subblocksize[idu][lev]!=0) +
+							(level_size[idu][lev]!=0) +
+							(level_assoc[idu][lev]!=0) +
+							(level_replacement[idu][lev]!=0) +
+							(level_fetch[idu][lev]!=0) +
+							(level_walloc[idu][lev]!=0) +	/* only for u or d */
+							(level_wback[idu][lev]!=0);	/* only for u or d */
 			int active = nparams != 0 || level_doccc[idu][lev] != 0;
 			nidu += active;
 			if (active && nparams != (6+2*(idu!=1))) {
@@ -425,11 +433,11 @@ verify_options()
 	for (lev = 0;  lev < maxlevel;  lev++) {
 		for (idu = 0;  idu < 3;  idu++) {
 			if (level_replacement[idu][lev]!=0 &&
-			    level_replacement[idu][lev]!='l' &&	/* LRU */
-			    level_replacement[idu][lev]!='f' &&	/* FIFO */
-			    level_replacement[idu][lev]!='r')	/* random */
+					level_replacement[idu][lev]!='l' &&	/* LRU */
+					level_replacement[idu][lev]!='f' &&	/* FIFO */
+					level_replacement[idu][lev]!='r')	/* random */
 				shorthelp ("level %d %ccache replacement policy unrecognized\n",
-					   lev+1, idu==0?'u':(idu==1?'i':'d'));
+						 lev+1, idu==0?'u':(idu==1?'i':'d'));
 		}
 	}
 
@@ -437,29 +445,29 @@ verify_options()
 	for (lev = 0;  lev < maxlevel;  lev++) {
 		for (idu = 0;  idu < 3;  idu++) {
 			if (level_fetch[idu][lev]!=0 &&
-			    level_fetch[idu][lev]!='d' &&	/* demand fetch */
-			    level_fetch[idu][lev]!='a' &&	/* always prefetch */
-			    level_fetch[idu][lev]!='m' &&	/* miss prefetch */
-			    level_fetch[idu][lev]!='t' &&	/* tagged prefetch */
-			    level_fetch[idu][lev]!='l' &&	/* load forward prefetch */
-			    level_fetch[idu][lev]!='s')		/* subblock prefetch */
+					level_fetch[idu][lev]!='d' &&	/* demand fetch */
+					level_fetch[idu][lev]!='a' &&	/* always prefetch */
+					level_fetch[idu][lev]!='m' &&	/* miss prefetch */
+					level_fetch[idu][lev]!='t' &&	/* tagged prefetch */
+					level_fetch[idu][lev]!='l' &&	/* load forward prefetch */
+					level_fetch[idu][lev]!='s')		/* subblock prefetch */
 				shorthelp ("level %d %ccache fetch policy unrecognized\n",
-					   lev+1, idu==0?'u':(idu==1?'i':'d'));
+						 lev+1, idu==0?'u':(idu==1?'i':'d'));
 			if ((level_fetch[idu][lev]=='l' || level_fetch[idu][lev]=='s') &&
-			    level_prefetch_distance[idu][lev] >
-			    level_blocksize[idu][lev]/(level_subblocksize[idu][lev]
-			    ?level_subblocksize[idu][lev]:level_blocksize[idu][lev]))
+					level_prefetch_distance[idu][lev] >
+					level_blocksize[idu][lev]/(level_subblocksize[idu][lev]
+					?level_subblocksize[idu][lev]:level_blocksize[idu][lev]))
 				shorthelp ("level %d %ccache prefetch distance > block size\n",
-					   lev+1, idu==0?'u':(idu==1?'i':'d'));
+						 lev+1, idu==0?'u':(idu==1?'i':'d'));
 			if (level_fetch[idu][lev]=='d' &&
-			    level_prefetch_abortpercent[idu][lev]!=0)
+					level_prefetch_abortpercent[idu][lev]!=0)
 				shorthelp ("level %d %ccache abort %% not allowed "
-					   "with demand fetch policy\n", lev+1,
-					   idu==0?'u':(idu==1?'i':'d'));
+						 "with demand fetch policy\n", lev+1,
+						 idu==0?'u':(idu==1?'i':'d'));
 			if (level_prefetch_abortpercent[idu][lev] < 0 ||
-			    level_prefetch_abortpercent[idu][lev] > 100)
+					level_prefetch_abortpercent[idu][lev] > 100)
 				shorthelp ("level %d %ccache abort %% out of range\n",
-					   lev+1, idu==0?'u':(idu==1?'i':'d'));
+						 lev+1, idu==0?'u':(idu==1?'i':'d'));
 		}
 	}
 
@@ -469,11 +477,11 @@ verify_options()
 			shorthelp ("level %d icache cannot have write allocate policy\n", lev+1);
 		for (idu = 0;  idu < 3;  idu++) {
 			if (level_walloc[idu][lev]!=0 &&
-			    level_walloc[idu][lev]!='a' &&	/* always write allocate */
-			    level_walloc[idu][lev]!='n' &&	/* never write allocate */
-			    level_walloc[idu][lev]!='f')	/* walloc only w/o fetch */
+					level_walloc[idu][lev]!='a' &&	/* always write allocate */
+					level_walloc[idu][lev]!='n' &&	/* never write allocate */
+					level_walloc[idu][lev]!='f')	/* walloc only w/o fetch */
 				shorthelp ("level %d %ccache write allocate policy unrecognized\n",
-					   lev+1, idu==0?'u':'d');
+						 lev+1, idu==0?'u':'d');
 		}
 	}
 
@@ -483,11 +491,11 @@ verify_options()
 			shorthelp ("level %d icache cannot have write back policy\n", lev+1);
 		for (idu = 0;  idu < 3;  idu++) {
 			if (level_wback[idu][lev]!=0 &&
-			    level_wback[idu][lev]!='a' &&	/* always write back */
-			    level_wback[idu][lev]!='n' &&	/* never write back (i.e., write through) */
-			    level_wback[idu][lev]!='f')		/* wback only w/o fetch */
+					level_wback[idu][lev]!='a' &&	/* always write back */
+					level_wback[idu][lev]!='n' &&	/* never write back (i.e., write through) */
+					level_wback[idu][lev]!='f')		/* wback only w/o fetch */
 				shorthelp ("level %d %ccache write back policy unrecognized\n",
-					   lev+1, idu==0?'u':'d');
+						 lev+1, idu==0?'u':'d');
 		}
 	}
 
@@ -500,7 +508,7 @@ verify_options()
 			x.size = ~(x.size >> 1);
 			if (level_subblocksize[idu][lev] > x.size)
 				shorthelp ("level %d %ccache sub-block size must be <= %u\n",
-					   lev+1, idu==0?'u':(idu==1?'i':'d'), x.size);
+						 lev+1, idu==0?'u':(idu==1?'i':'d'), x.size);
 		}
 	}
 
@@ -509,17 +517,17 @@ verify_options()
 		for (idu = 0;  idu < 3;  idu++) {
 			d4stacknode *xp;
 			if (level_blocksize[idu][lev]!= 0 &&
-			    level_subblocksize[idu][lev] > level_blocksize[idu][lev])
+					level_subblocksize[idu][lev] > level_blocksize[idu][lev])
 				shorthelp ("level %d %ccache has sub-blocksize > blocksize\n",
-					   lev+1, idu==0?'u':(idu==1?'i':'d'));
+						 lev+1, idu==0?'u':(idu==1?'i':'d'));
 			if (level_subblocksize[idu][lev] != 0 &&
-			    level_blocksize[idu][lev] / level_subblocksize[idu][lev] > sizeof(xp->valid)*CHAR_BIT)
+					level_blocksize[idu][lev] / level_subblocksize[idu][lev] > sizeof(xp->valid)*CHAR_BIT)
 				shorthelp ("level %d %ccache must have no more than %u sub-blocks per block\n",
-					   lev+1, idu==0?'u':(idu==1?'i':'d'), sizeof(xp->valid)*CHAR_BIT);
+						 lev+1, idu==0?'u':(idu==1?'i':'d'), sizeof(xp->valid)*CHAR_BIT);
 			if (level_subblocksize[idu][lev] != 0 && level_doccc[idu][lev] != 0 &&
-			    D4_BITMAP_RSIZE < level_blocksize[idu][lev] / level_subblocksize[idu][lev])
+					D4_BITMAP_RSIZE < level_blocksize[idu][lev] / level_subblocksize[idu][lev])
 				shorthelp ("level %d %ccache must have no more than %u sub-blocks per block for CCC\n",
-					   lev+1, idu==0?'u':(idu==1?'i':'d'), D4_BITMAP_RSIZE);
+						 lev+1, idu==0?'u':(idu==1?'i':'d'), D4_BITMAP_RSIZE);
 		}
 	}
 
@@ -538,41 +546,41 @@ verify_options()
 	 */
 	for (lev = 0;  lev < maxlevel;  lev++) {
 		if (0 != (level_blocksize[0][lev]    |
-			  level_subblocksize[0][lev] |
-			  level_size[0][lev]         |
-			  level_assoc[0][lev]        |
-			  level_replacement[0][lev]  |
-			  level_fetch[0][lev]        | 
-			  level_walloc[0][lev]       |
-			  level_wback[0][lev]        |
-			  level_doccc[0][lev]         ) &&
-		    0 != (level_blocksize[1][lev]    | level_blocksize[2][lev]    |
-			  level_subblocksize[1][lev] | level_subblocksize[2][lev] |
-			  level_size[1][lev]         | level_size[2][lev]         |
-			  level_assoc[1][lev]        | level_assoc[2][lev]        |
-			  level_replacement[1][lev]  | level_replacement[2][lev]  |
-			  level_fetch[1][lev]        | level_fetch[2][lev]        |
-			  level_walloc[1][lev]       | level_walloc[2][lev]       |
-			  level_wback[1][lev]        | level_wback[2][lev]        |
-			  level_doccc[1][lev]        | level_doccc[2][lev]         ))
+				level_subblocksize[0][lev] |
+				level_size[0][lev]         |
+				level_assoc[0][lev]        |
+				level_replacement[0][lev]  |
+				level_fetch[0][lev]        |
+				level_walloc[0][lev]       |
+				level_wback[0][lev]        |
+				level_doccc[0][lev]         ) &&
+				0 != (level_blocksize[1][lev]    | level_blocksize[2][lev]    |
+				level_subblocksize[1][lev] | level_subblocksize[2][lev] |
+				level_size[1][lev]         | level_size[2][lev]         |
+				level_assoc[1][lev]        | level_assoc[2][lev]        |
+				level_replacement[1][lev]  | level_replacement[2][lev]  |
+				level_fetch[1][lev]        | level_fetch[2][lev]        |
+				level_walloc[1][lev]       | level_walloc[2][lev]       |
+				level_wback[1][lev]        | level_wback[2][lev]        |
+				level_doccc[1][lev]        | level_doccc[2][lev]         ))
 			shorthelp ("level %d has i or d together with u cache parameters\n",
-				   lev+1);
+					 lev+1);
 	}
 
 	/* check consistency of sizes */
 	for (lev = 0;  lev < maxlevel;  lev++) {
 		for (idu = 0;  idu < 3;  idu++) {
 			if (level_blocksize[idu][lev] != 0 &&
-			    level_blocksize[idu][lev] * level_assoc[idu][lev] > level_size[idu][lev])
+					level_blocksize[idu][lev] * level_assoc[idu][lev] > level_size[idu][lev])
 				shorthelp ("level %d %ccache size < blocksize * associativity\n",
-					   lev+1, idu==0?'u':(idu==1?'i':'d'));
+						 lev+1, idu==0?'u':(idu==1?'i':'d'));
 		}
 	}
 
 	/* check for no u->id split */
 	for (lev = 1;  lev < maxlevel;  lev++) {
 		if (level_blocksize[0][lev-1] != 0 &&
-		    level_blocksize[0][lev] == 0)
+				level_blocksize[0][lev] == 0)
 			shorthelp ("level %d cache is unified, level %d is not\n", lev, lev+1);
 	}
 }

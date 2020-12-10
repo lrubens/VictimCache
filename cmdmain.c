@@ -132,6 +132,7 @@ do1arg (const char *opt, const char *arg)
 	return 0;	/* can't really get here, but some compilers get upset if we don't have a return value */
 }
 
+int vc_size;
 
 /*
  * Process all the command line args
@@ -155,6 +156,9 @@ doargs (int argc, char **argv)
 		const char *opt = v[0];
 		const char *arg = (argc>1) ? v[1] : NULL;
 		x = do1arg (opt, arg);
+		if(!strcmp(opt, "-vc-size")) {  // Bootleg cmd interface since original interface is trash
+			vc_size = atoi(arg);
+		}
 		v += x;
 		argc -= x;
 	}
@@ -1775,6 +1779,7 @@ initialize_caches (d4cache **icachep, d4cache **dcachep)
 					die ("cannot create level %d %ccache\n",
 					     lev+1, idu==0?'u':(idu==1?'i':'d'));
 				init_1cache (c, lev, idu);
+				c->vc_size = vc_size;
 				levcache[idu][lev] = c;
 			}
 		}

@@ -129,6 +129,7 @@ typedef struct d4_stacknode_struct {
 	unsigned int	referenced;	    /* bit for each subblock */
 	unsigned int	dirty;		    /* bit for each subblock */
 	int		onstack;	    /* which stack is node on? */
+	int victim;      /* Is this stack part of victim cache */
 	struct d4_cache_struct *cachep;	    /* which cache is this a part of */
 	struct d4_stacknode_struct *down;   /* ptr to less recently used node */
 	struct d4_stacknode_struct *up;     /* ptr to more recently used node */
@@ -204,6 +205,8 @@ typedef struct d4_cache_struct {
 	d4stackhead *stack;	/* the priority stacks for this cache */
 	d4pendstack *pending;	/* stack for prefetch etc. */
 	struct d4_cache_struct *link; /* linked list of all caches */
+	d4stackhead *vc;	/* the priority stacks for the victim cache */
+	int vc_size;
 
 	/*
 	 * Cache parameters
@@ -232,15 +235,15 @@ typedef struct d4_cache_struct {
 	 */
 				/* adjust priority stack */
 	d4stacknode	*(*replacementf) (struct d4_cache_struct *, int stacknum,
-					  d4memref, d4stacknode *ptr);
+						d4memref, d4stacknode *ptr);
 				/* indicate a prefetch with prefetch_pending */
 	d4pendstack	*(*prefetchf) (struct d4_cache_struct *, d4memref,
-				       int miss, d4stacknode *ptr);
+							 int miss, d4stacknode *ptr);
 				/* walloc returns true for write-allocate */
 	int		(*wallocf) (struct d4_cache_struct *, d4memref);
 				/* wback returns true for write-back */
 	int		(*wbackf) (struct d4_cache_struct *, d4memref, int,
-				   d4stacknode *ptr, int);
+					 d4stacknode *ptr, int);
 
 	int		prefetch_distance;	/* specific to built-in prefetch policies */
 	int		prefetch_abortpercent;
@@ -301,7 +304,7 @@ typedef struct d4_cache_struct {
 #define D4VAL(cache,field)						      \
 	((D4CUSTOM && D4_TRIGGER_FIELD(D4_CACHEID,field)) ?		      \
 	 D4_VAL_(cache,D4_CACHEID,field) :				      \
-         ((cache)->field))
+				 ((cache)->field))
 	/* Some additional internal macros help get around ## wierdness */
 #define D4_VAL__(cache,cacheid,field)	D4_CACHE_ ## cacheid ## _ ## field
 #define D4_VAL_(cache,cacheid,field)	D4_VAL__(cache,cacheid,field)
@@ -361,7 +364,7 @@ typedef struct d4_cache_struct {
 #define D4ADDR2SBMASK(cache,mref) /* produce subblock bit mask for mref */    \
 	(D4LG2MASK(D4REFNSB(cache,mref)) <<				      \
 	 (((mref).address-D4ADDR2BLOCK(cache,(mref).address)) >>	      \
-	  D4VAL(cache,lg2subblocksize)))
+		D4VAL(cache,lg2subblocksize)))
 
 
 

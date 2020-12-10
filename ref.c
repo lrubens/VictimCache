@@ -113,7 +113,7 @@ const int d4custom = D4CUSTOM;
 #if D4CUSTOM
 static void d4dummy_crash (char *name)
 	{ fprintf (stderr, "Dinero IV: someone called dummy function %s!\n", name);
-	  exit(9);
+		exit(9);
 	}
 d4stacknode *d4rep_lru (d4cache *c, int stacknum, d4memref m, d4stacknode *ptr)
 	{ d4dummy_crash("d4rep_lru"); return NULL; }
@@ -196,17 +196,20 @@ d4rep_lru (d4cache *c, int stacknum, d4memref m, d4stacknode *ptr)
 {
 	if (ptr != NULL) {	/* hits */
 		if ((!D4CUSTOM || D4VAL (c, assoc) > 1 || (D4VAL (c, flags) & D4F_CCC) != 0) &&
-		    ptr != c->stack[stacknum].top)
+				ptr != c->stack[stacknum].top)
 			d4movetotop (c, stacknum, ptr);
 	}
 	else {			/* misses */
 		ptr = c->stack[stacknum].top->up;
+		d4stacknode *test = c->stack[stacknum].top->up;
 		assert (ptr->valid == 0);
 		ptr->blockaddr = D4ADDR2BLOCK (c, m.address);
 		if ((!D4CUSTOM || D4VAL(c,assoc) >= D4HASH_THRESH || (D4VAL(c,flags)&D4F_CCC)!=0) &&
-		    c->stack[stacknum].n > D4HASH_THRESH)
+				c->stack[stacknum].n > D4HASH_THRESH)
 			d4hash (c, stacknum, ptr);
 		c->stack[stacknum].top = ptr;	/* quicker than d4movetotop */
+
+
 	}
 	return ptr;
 }
@@ -469,7 +472,7 @@ int
 d4wback_nofetch (d4cache *c, d4memref m, int setnumber, d4stacknode *ptr, int walloc)
 {
 	return (D4ADDR2SBMASK(c,m) & ~ptr->valid) == 0 ||
-	       m.size == (D4REFNSB(c,m) << D4VAL (c, lg2subblocksize));
+				 m.size == (D4REFNSB(c,m) << D4VAL (c, lg2subblocksize));
 }
 #endif	/* !D4CUSTOM || D4_OPT (wback_nofetch) */
 
@@ -590,10 +593,10 @@ d4_splitm (d4cache *c, d4memref mr, d4addr ba)
 	if (ba == D4ADDR2BLOCK (c, mr.address + mr.size - 1))
 		return mr;
 	pf = d4get_mref();
-        pf->m.address = ba + bsize;
-        pf->m.accesstype = mr.accesstype | D4_MULTIBLOCK;
+				pf->m.address = ba + bsize;
+				pf->m.accesstype = mr.accesstype | D4_MULTIBLOCK;
 	newsize = bsize - (mr.address&bmask);
-        pf->m.size = mr.size - newsize;
+				pf->m.size = mr.size - newsize;
 	pf->next = c->pending;
 	c->pending = pf;
 	c->multiblock++;
@@ -610,17 +613,19 @@ d4_splitm (d4cache *c, d4memref mr, d4addr ba)
 void
 d4ref (d4cache *c, d4memref mr)
 {
-    /* special cases first */
-    if ((D4VAL (c, flags) & D4F_MEM) != 0) /* Special case for simulated memory */
+		/* special cases first */
+		if ((D4VAL (c, flags) & D4F_MEM) != 0) /* Special case for simulated memory */
 	c->fetch[(int)mr.accesstype]++;
-    else if (mr.accesstype == D4XCOPYB || mr.accesstype == D4XINVAL) {
+		else if (mr.accesstype == D4XCOPYB || mr.accesstype == D4XINVAL) {
 	d4memref m = mr;	/* dumb compilers might de-optimize if we take addr of mr */
 	if (m.accesstype == D4XCOPYB)
 		d4copyback (c, &m, 1);
+		/* d4invalidate (c, &m, 1); */
+		/* d4copyback (c, NULL, 1); */
 	else
 		d4invalidate (c, &m, 1);
-    }
-    else {				 /* Everything else */
+		}
+		else {				 /* Everything else */
 	const d4addr blockaddr = D4ADDR2BLOCK (c, mr.address);
 	const d4memref m = d4_splitm (c, mr, blockaddr);
 	const int atype = D4BASIC_ATYPE (m.accesstype);
@@ -658,12 +663,12 @@ d4ref (d4cache *c, d4memref mr)
 	 * Optionally, some percentage may be thrown away.
 	 */
 	if ((!D4CUSTOM || !D4_OPT (prefetch_none)) &&
-	    (m.accesstype == D4XREAD || m.accesstype == D4XINSTRN)) {
+			(m.accesstype == D4XREAD || m.accesstype == D4XINSTRN)) {
 		d4pendstack *pf = D4VAL (c, prefetchf) (c, m, miss, ptr);
 		if (pf != NULL) {
 			/* Note: 0 <= random() <= 2^31-1 and 0 <= random()/(INT_MAX/100) < 100. */
 			if (D4VAL (c, prefetch_abortpercent) > 0 &&
-			    random()/(INT_MAX/100) < D4VAL (c, prefetch_abortpercent))
+					random()/(INT_MAX/100) < D4VAL (c, prefetch_abortpercent))
 				d4put_mref (pf);	/* throw it away */
 			else {
 				pf->next = c->pending;	/* add to pending list */
@@ -716,6 +721,35 @@ d4ref (d4cache *c, d4memref mr)
 				if (c->stack[setnumber].n > D4HASH_THRESH)
 					d4_unhash (c, setnumber, rptr);
 				rptr->valid = 0;
+				d4stacknode *vc_top = c->vc->top;
+				d4stacknode *vc_bot;
+				d4stacknode *bot = rptr;
+				d4stacknode *dummy_ptr = calloc(1, sizeof(d4stacknode));
+				d4addr bl_addr;
+				unsigned int referenced;
+				unsigned int dirty;
+				int onstack;
+				vc_bot = vc_top->up;
+				if(bot->blockaddr != 0 && bot->blockaddr != vc_top->blockaddr) {
+					bl_addr = bot->blockaddr;
+					referenced = bot->referenced;
+					dirty = bot->dirty;
+					onstack = bot->onstack;
+
+					dummy_ptr->blockaddr = bl_addr;
+					dummy_ptr->valid = 1;
+					dummy_ptr->referenced = referenced;
+					dummy_ptr->dirty = 1;
+					dummy_ptr->onstack = -1;
+					dummy_ptr->cachep = c;
+					dummy_ptr->victim = 1;
+
+					dummy_ptr->down = vc_top;
+					dummy_ptr->up = vc_bot;
+					vc_bot->down = dummy_ptr;
+					c->vc->top = dummy_ptr;
+				}
+
 			}
 		}
 	}
@@ -735,7 +769,7 @@ d4ref (d4cache *c, d4memref mr)
 		c->pending = newm;
 	}
 	if (miss && (ronly || atype != D4XWRITE ||
-		     (walloc && m.size != D4REFNSB (c, m) << D4VAL (c, lg2subblocksize)))) {
+				 (walloc && m.size != D4REFNSB (c, m) << D4VAL (c, lg2subblocksize)))) {
 		d4pendstack *newm = d4get_mref();
 		/* note, we drop prefetch attribute */
 		newm->m.accesstype = (atype == D4XWRITE) ? D4XREAD : atype;
@@ -752,7 +786,7 @@ d4ref (d4cache *c, d4memref mr)
 	 * simulation.
 	 */
 	if ((D4CUSTOM && D4_OPT (ccc)) ||
-	    (!D4CUSTOM && (c->flags & D4F_CCC) != 0)) {
+			(!D4CUSTOM && (c->flags & D4F_CCC) != 0)) {
 					/* set to use for fully assoc cache */
 		const int fullset = D4VAL(c,numsets);
 					/* number of blocks in fully assoc cache */
@@ -822,7 +856,7 @@ d4ref (d4cache *c, d4memref mr)
 	 */
 	if (c->pending)
 		d4_dopending (c, c->pending);
-    }
+		}
 }
 
 #endif /* !D4CUSTOM || D4_REF_ONCE>1 */

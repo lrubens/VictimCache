@@ -113,11 +113,11 @@ d4setup()
 
 		/* Check some stuff the user shouldn't muck with */
 		if (c->stack != NULL || c->pending != NULL ||
-		    c->cacheid < 1 ||
-		    (c->link == NULL && c->cacheid != 1) ||
-		    (c->flags != D4F_MEM && c->downstream == NULL) ||
-		    c->numsets != 0 ||
-		    c->ranges != NULL || c->nranges != 0 || c->maxranges != 0)
+				c->cacheid < 1 ||
+				(c->link == NULL && c->cacheid != 1) ||
+				(c->flags != D4F_MEM && c->downstream == NULL) ||
+				c->numsets != 0 ||
+				c->ranges != NULL || c->nranges != 0 || c->maxranges != 0)
 			goto fail1;
 
 		/*
@@ -144,23 +144,23 @@ d4setup()
 				if (d4_cust_vals[c->cacheid][5] != c->prefetch_abortpercent)
 					problem |= 0x40;
 				if (d4_cust_vals[c->cacheid][6] != ((c->replacementf==d4rep_lru)?'l':
-							    (c->replacementf==d4rep_fifo)?'f':
-							    (c->replacementf==d4rep_random)?'r':0))
+									(c->replacementf==d4rep_fifo)?'f':
+									(c->replacementf==d4rep_random)?'r':0))
 					problem |= 0x80;
 				if (d4_cust_vals[c->cacheid][7] != ((c->prefetchf==d4prefetch_none)?'n':
-							    (c->prefetchf==d4prefetch_always)?'a':
-							    (c->prefetchf==d4prefetch_loadforw)?'l':
-							    (c->prefetchf==d4prefetch_subblock)?'s':
-							    (c->prefetchf==d4prefetch_miss)?'m':
-							    (c->prefetchf==d4prefetch_tagged)?'t':0))
+									(c->prefetchf==d4prefetch_always)?'a':
+									(c->prefetchf==d4prefetch_loadforw)?'l':
+									(c->prefetchf==d4prefetch_subblock)?'s':
+									(c->prefetchf==d4prefetch_miss)?'m':
+									(c->prefetchf==d4prefetch_tagged)?'t':0))
 					problem |= 0x100;
 				if (d4_cust_vals[c->cacheid][8] != ((c->wallocf==d4walloc_always)?'a':
-							    (c->wallocf==d4walloc_never)?'n':
-							    (c->wallocf==d4walloc_nofetch)?'f':0))
+									(c->wallocf==d4walloc_never)?'n':
+									(c->wallocf==d4walloc_nofetch)?'f':0))
 					problem |= 0x200;
 				if (d4_cust_vals[c->cacheid][9] != ((c->wbackf==d4wback_always)?'a':
-							    (c->wbackf==d4wback_never)?'n':
-							    (c->wbackf==d4wback_nofetch)?'f':0))
+									(c->wbackf==d4wback_never)?'n':
+									(c->wbackf==d4wback_nofetch)?'f':0))
 					problem |= 0x400;
 			}
 			if (problem) {
@@ -192,13 +192,38 @@ d4setup()
 			if (c->wbackf == NULL || c->name_wback == NULL)
 				goto fail9;
 
+			c->vc = calloc(1, sizeof(d4stackhead));
+			if(c->vc==NULL)
+				goto fail10;
+			nnodes=c->vc_size;   // TODO: Modify number of blocks in victim cache
+			d4stacknode *vc_nodes = calloc(nnodes, sizeof(d4stacknode));
+			vc_nodes->victim = 1;   // Set indicator for victim cache
+			if(vc_nodes == NULL)
+				goto fail11;
+			d4stacknode *vc_ptr;
+			vc_ptr=vc_nodes;
+			c->vc->top = vc_ptr;
+			c->vc->n = nnodes;
+
+			for(i = 1; i < nnodes - 1; i++) {
+				vc_ptr[i].onstack= -1;
+				vc_ptr[i].down=&vc_ptr[i+1];
+				vc_ptr[i].up=&vc_ptr[i-1];
+			}
+			vc_ptr[0].up=&vc_ptr[nnodes-1];
+			vc_ptr[0].down=&vc_ptr[1];
+			vc_ptr[0].onstack=-1;
+			vc_ptr[nnodes-1].down=&vc_ptr[0];
+			vc_ptr[nnodes-1].up=&vc_ptr[nnodes-2];
+			vc_ptr[nnodes-1].onstack=-1;
+
 			/* we don't try to check per-policy cache state */
 
 			/* it looks ok, now initialize */
 			c->numsets = (1<<c->lg2size) / ((1<<c->lg2blocksize) * c->assoc);
 
 			c->stack = calloc (c->numsets+((c->flags&D4F_CCC)!=0),
-					   sizeof(d4stackhead));
+						 sizeof(d4stackhead));
 			if (c->stack == NULL)
 				goto fail10;
 			nnodes = c->numsets * (1 + c->assoc) +
@@ -206,6 +231,7 @@ d4setup()
 			nodes = calloc (nnodes, sizeof(d4stacknode));
 			if (nodes == NULL)
 				goto fail11;
+			nodes->victim = 0;
 			for (i = 0;  i < nnodes;  i++)
 				nodes[i].cachep = c;
 			ptr = nodes;
@@ -469,13 +495,13 @@ d4checkstack (d4cache *c, int stacknum, char *msg)
 d4stacknode *
 d4_find (d4cache *c, int stacknum, d4addr blockaddr)
 {
-	d4stacknode *ptr;
+	d4stacknode *ptr, *vc;
 
 	if (c->stack[stacknum].n > D4HASH_THRESH) {
 		int buck = D4HASH (blockaddr, stacknum, c->cacheid);
 		for (ptr = d4stackhash.table[buck];
-		     ptr!=NULL && (ptr->blockaddr!=blockaddr || ptr->cachep!=c || ptr->onstack != stacknum);
-		     ptr = ptr->bucket)
+				 ptr!=NULL && (ptr->blockaddr!=blockaddr || ptr->cachep!=c || ptr->onstack != stacknum);
+				 ptr = ptr->bucket)
 			assert (ptr->valid != 0);
 		return ptr;
 	}
@@ -486,13 +512,50 @@ d4_find (d4cache *c, int stacknum, d4addr blockaddr)
 	 * because the last node is guaranteed to have valid==0.
 	 */
 	for (ptr = c->stack[stacknum].top;
-	     ptr->blockaddr != blockaddr && ptr->valid != 0;
-	     ptr = ptr->down)
+			 ptr->blockaddr != blockaddr && ptr->valid != 0;
+			 ptr = ptr->down)
 		continue;
 
-	if (ptr->valid != 0)
+	if (ptr->valid != 0) {
+		/* printf("Found in L1 cache\n\n"); */
 		return ptr;
+	}
+	vc=c->vc->top;
+	d4stacknode *temp = vc;
+	if(temp == NULL)
+		return NULL;
 
+	/* for (int i = 0; i < c->vc->n; ++i) { */
+	/* 	printf("block: %ld\n", vc->blockaddr); */
+	/* 	if(vc->blockaddr == blockaddr && vc->valid != 0) { */
+	/* 		printf("Found you bucko!\n"); */
+	/* 		return vc; */
+	/* 	} */
+	/* 	vc = vc->down; */
+	/* } */
+
+	/* for (vc = c->vc->top; */
+	/* 		 vc->blockaddr != blockaddr && vc->valid != 0 && temp->down != vc; */
+	/* 		 vc = vc->down) { */
+	/* 	continue; */
+	/* } */
+	int count = 0;
+	if(vc->blockaddr != 0) {
+		while(temp->down != vc && count < c->vc_size) {
+			if(temp->blockaddr == blockaddr && temp->valid != 0 && temp->blockaddr != 0) {
+				break;
+			}
+			count++;
+			temp = temp->down;
+		}
+		if(temp->valid != 0 && temp->blockaddr == blockaddr) {
+			// Sanity check :)
+#ifdef DEBUG
+			printf("Searching for %ld and Found %ld in Victim Cache!!\n", blockaddr, temp->blockaddr);
+#endif
+			return temp;
+		}
+	}
 	return NULL;	/* not found */
 }
 
@@ -530,12 +593,24 @@ d4movetotop (d4cache *c, int stacknum, d4stacknode *ptr)
 	if (ptr != top) {
 		bot = top->up;
 		if (bot != ptr)	{	/* general case */
-			ptr->down->up = ptr->up;	/* remove */
-			ptr->up->down = ptr->down;
-			ptr->up = bot;			/* insert between top & bot */
-			ptr->down = top;
-			bot->down = ptr;
-			top->up = ptr;
+
+			if( ptr->victim == 1){
+				bot->blockaddr = ptr->blockaddr;
+				bot->valid = ptr->valid;
+				bot->referenced = ptr->referenced;
+				bot->dirty = ptr->dirty;
+				c->vc->top = ptr->down;
+				ptr = bot;
+				bot->up->valid = 0;
+			}
+			else {
+				ptr->down->up = ptr->up;	/* remove */
+				ptr->up->down = ptr->down;
+				ptr->up = bot;			/* insert between top & bot */
+				ptr->down = top;
+				bot->down = ptr;
+				top->up = ptr;
+			}
 		}
 		c->stack[stacknum].top = ptr;
 	}
@@ -799,7 +874,7 @@ d4invalidate (d4cache *c, const d4memref *m, int prop)
 		if (ptr != NULL)
 			d4_invblock (c, stacknum, ptr);
 		if ((c->flags & D4F_CCC) != 0 &&	/* fully assoc cache */
-		    (ptr = d4_find (c, c->numsets, blockaddr)) != NULL)
+				(ptr = d4_find (c, c->numsets, blockaddr)) != NULL)
 			d4_invblock (c, c->numsets, ptr);
 	}
 	else for (stacknum=0;  stacknum < c->numsets + ((c->flags & D4F_CCC) != 0);  stacknum++) {
@@ -854,10 +929,10 @@ d4_invinfcache (d4cache *c, const d4memref *m)
 				hi = i - 1;		/* need to look lower */
 			else {				/* found the right range */
 				for (nsb = c->lg2blocksize - c->lg2subblocksize;
-				     nsb-- > 0;
-				     bitoff++)
+						 nsb-- > 0;
+						 bitoff++)
 					c->ranges[i].bitmap[bitoff/CHAR_BIT] &=
-					      ~(1<<(bitoff%CHAR_BIT));
+								~(1<<(bitoff%CHAR_BIT));
 				break;
 			}
 		}
@@ -880,9 +955,9 @@ d4customize (FILE *f)
 	int i, n;
 
 	fprintf (f, "#if !D4CUSTOM\n"
-		    "#error \"D4CUSTOM not set\"\n"
-		    "#endif\n"
-		    "#include \"ref.c\"\n\n");	/* get one-time stuff */
+				"#error \"D4CUSTOM not set\"\n"
+				"#endif\n"
+				"#include \"ref.c\"\n\n");	/* get one-time stuff */
 
 	/*
 	 * define d4_custom[] and d4_ncustom,
@@ -915,7 +990,7 @@ d4customize (FILE *f)
 
 		/* Define helper used by D4VAL macro */
 		fprintf (f, "#undef D4_CACHEID\n"
-			    "#define D4_CACHEID %d\n", cid);
+					"#define D4_CACHEID %d\n", cid);
 
 		/*
 		 * Define a cache-specific macro
@@ -925,38 +1000,38 @@ d4customize (FILE *f)
 		 * if we find we can't use it.
 		 */
 		fprintf (f, "#define D4_CACHE_%d_flags 0x%x\n"
-			    "#define D4_TRIGGER_%d_flags 1\n",
-			    cid, c->flags, cid);
+					"#define D4_TRIGGER_%d_flags 1\n",
+					cid, c->flags, cid);
 		fprintf (f, "#define D4_CACHE_%d_lg2blocksize %d\n"
-			    "#define D4_TRIGGER_%d_lg2blocksize 1\n",
-			    cid, c->lg2blocksize, cid);
+					"#define D4_TRIGGER_%d_lg2blocksize 1\n",
+					cid, c->lg2blocksize, cid);
 		fprintf (f, "#define D4_CACHE_%d_lg2subblocksize %d\n"
-			    "#define D4_TRIGGER_%d_lg2subblocksize 1\n",
-			    cid, c->lg2subblocksize, cid);
+					"#define D4_TRIGGER_%d_lg2subblocksize 1\n",
+					cid, c->lg2subblocksize, cid);
 		fprintf (f, "#define D4_CACHE_%d_lg2size %d\n"
-			    "#define D4_TRIGGER_%d_lg2size 1\n",
-			    cid, c->lg2size, cid);
+					"#define D4_TRIGGER_%d_lg2size 1\n",
+					cid, c->lg2size, cid);
 		fprintf (f, "#define D4_CACHE_%d_assoc %d\n"
-			    "#define D4_TRIGGER_%d_assoc 1\n",
-			    cid, c->assoc, cid);
+					"#define D4_TRIGGER_%d_assoc 1\n",
+					cid, c->assoc, cid);
 		fprintf (f, "#define D4_CACHE_%d_numsets %d\n"
-			    "#define D4_TRIGGER_%d_numsets 1\n",
-			    cid, c->numsets, cid);
+					"#define D4_TRIGGER_%d_numsets 1\n",
+					cid, c->numsets, cid);
 		fprintf (f, "#define D4_CACHE_%d_prefetch_abortpercent %d\n"
-			    "#define D4_TRIGGER_%d_prefetch_abortpercent 1\n",
-			    cid, c->prefetch_abortpercent, cid);
+					"#define D4_TRIGGER_%d_prefetch_abortpercent 1\n",
+					cid, c->prefetch_abortpercent, cid);
 		fprintf (f, "#define D4_CACHE_%d_replacementf d4_%dreplacement\n"
-			    "#define D4_TRIGGER_%d_replacementf 1\n",
-			    cid, cid, cid);
+					"#define D4_TRIGGER_%d_replacementf 1\n",
+					cid, cid, cid);
 		fprintf (f, "#define D4_CACHE_%d_prefetchf d4_%dprefetch\n"
-			    "#define D4_TRIGGER_%d_prefetchf 1\n",
-			    cid, cid, cid);
+					"#define D4_TRIGGER_%d_prefetchf 1\n",
+					cid, cid, cid);
 		fprintf (f, "#define D4_CACHE_%d_wallocf d4_%dwalloc\n"
-			    "#define D4_TRIGGER_%d_wallocf 1\n",
-			    cid, cid, cid);
+					"#define D4_TRIGGER_%d_wallocf 1\n",
+					cid, cid, cid);
 		fprintf (f, "#define D4_CACHE_%d_wbackf d4_%dwback\n"
-			    "#define D4_TRIGGER_%d_wbackf 1\n",
-			    cid, cid, cid);
+					"#define D4_TRIGGER_%d_wbackf 1\n",
+					cid, cid, cid);
 
 		/* define macro to activate CCC computations */
 		fprintf (f, "#define D4_OPTS_%d_ccc %d\n", cid, (c->flags & D4F_CCC) != 0);
@@ -972,120 +1047,120 @@ d4customize (FILE *f)
 		 */
 		if (c->replacementf == d4rep_lru)
 			fprintf (f, "#define D4_OPTS_%d_rep_lru 1\n"
-				    "#define D4_POLICY_%d_rep 'l'\n"
-				    "#undef d4rep_lru\n"
-				    "#define d4rep_lru d4_%dreplacement\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_rep 'l'\n"
+						"#undef d4rep_lru\n"
+						"#define d4rep_lru d4_%dreplacement\n",
+						cid, cid, cid);
 		else if (c->replacementf == d4rep_fifo)
 			fprintf (f, "#define D4_OPTS_%d_rep_fifo 1\n"
-				    "#define D4_POLICY_%d_rep 'f'\n"
-				    "#undef d4rep_fifo\n"
-				    "#define d4rep_fifo d4_%dreplacement\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_rep 'f'\n"
+						"#undef d4rep_fifo\n"
+						"#define d4rep_fifo d4_%dreplacement\n",
+						cid, cid, cid);
 		else if (c->replacementf == d4rep_random)
 			fprintf (f, "#define D4_OPTS_%d_rep_random 1\n"
-				    "#define D4_POLICY_%d_rep 'r'\n"
-				    "#undef d4rep_random\n"
-				    "#define d4rep_random d4_%dreplacement\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_rep 'r'\n"
+						"#undef d4rep_random\n"
+						"#define d4rep_random d4_%dreplacement\n",
+						cid, cid, cid);
 		else
 			fprintf (f, "#undef D4_TRIGGER_%d_replacementf\n"
-				    "#define D4_TRIGGER_%d_replacementf 0\n"
-				    "#define D4_POLICY_%d_rep 0\n"
-				    "#define d4_%dreplacement D4_CACHE_bogus_replacementf\n",
-				    cid, cid, cid, cid);
+						"#define D4_TRIGGER_%d_replacementf 0\n"
+						"#define D4_POLICY_%d_rep 0\n"
+						"#define d4_%dreplacement D4_CACHE_bogus_replacementf\n",
+						cid, cid, cid, cid);
 		if (c->prefetchf != d4prefetch_none)
 			fprintf (f, "#define D4_OPTS_%d_prefetch_none 0\n", cid);
 		if (c->prefetchf == d4prefetch_none)
 			fprintf (f, "#define D4_OPTS_%d_prefetch_none 1\n"
-				    "#define D4_POLICY_%d_pref 'n'\n"
-				    "#undef d4prefetch_none\n"
-				    "#define d4prefetch_none d4_%dprefetch\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_pref 'n'\n"
+						"#undef d4prefetch_none\n"
+						"#define d4prefetch_none d4_%dprefetch\n",
+						cid, cid, cid);
 		else if (c->prefetchf == d4prefetch_always)
 			fprintf (f, "#define D4_OPTS_%d_prefetch_always 1\n"
-				    "#define D4_POLICY_%d_pref 'a'\n"
-				    "#undef d4prefetch_always\n"
-				    "#define d4prefetch_always d4_%dprefetch\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_pref 'a'\n"
+						"#undef d4prefetch_always\n"
+						"#define d4prefetch_always d4_%dprefetch\n",
+						cid, cid, cid);
 		else if (c->prefetchf == d4prefetch_loadforw)
 			fprintf (f, "#define D4_OPTS_%d_prefetch_loadforw 1\n"
-				    "#define D4_POLICY_%d_pref 'l'\n"
-				    "#undef d4prefetch_loadforw\n"
-				    "#define d4prefetch_loadforw d4_%dprefetch\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_pref 'l'\n"
+						"#undef d4prefetch_loadforw\n"
+						"#define d4prefetch_loadforw d4_%dprefetch\n",
+						cid, cid, cid);
 		else if (c->prefetchf == d4prefetch_subblock)
 			fprintf (f, "#define D4_OPTS_%d_prefetch_subblock 1\n"
-				    "#define D4_POLICY_%d_pref 's'\n"
-				    "#undef d4prefetch_subblock\n"
-				    "#define d4prefetch_subblock d4_%dprefetch\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_pref 's'\n"
+						"#undef d4prefetch_subblock\n"
+						"#define d4prefetch_subblock d4_%dprefetch\n",
+						cid, cid, cid);
 		else if (c->prefetchf == d4prefetch_miss)
 			fprintf (f, "#define D4_OPTS_%d_prefetch_miss 1\n"
-				    "#define D4_POLICY_%d_pref 'm'\n"
-				    "#undef d4prefetch_miss\n"
-				    "#define d4prefetch_miss d4_%dprefetch\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_pref 'm'\n"
+						"#undef d4prefetch_miss\n"
+						"#define d4prefetch_miss d4_%dprefetch\n",
+						cid, cid, cid);
 		else if (c->prefetchf == d4prefetch_tagged)
 			fprintf (f, "#define D4_OPTS_%d_prefetch_tagged 1\n"
-				    "#define D4_POLICY_%d_pref 't'\n"
-				    "#undef d4prefetch_tagged\n"
-				    "#define d4prefetch_tagged d4_%dprefetch\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_pref 't'\n"
+						"#undef d4prefetch_tagged\n"
+						"#define d4prefetch_tagged d4_%dprefetch\n",
+						cid, cid, cid);
 		else
 			fprintf (f, "#undef D4_TRIGGER_%d_prefetchf\n"
-				    "#define D4_TRIGGER_%d_prefetchf 0\n"
-				    "#define D4_POLICY_%d_pref 0\n"
-				    "#define d4_%dprefetch D4_CACHE_bogus_prefetchf\n",
-				    cid, cid, cid, cid);
+						"#define D4_TRIGGER_%d_prefetchf 0\n"
+						"#define D4_POLICY_%d_pref 0\n"
+						"#define d4_%dprefetch D4_CACHE_bogus_prefetchf\n",
+						cid, cid, cid, cid);
 		if (c->wallocf == d4walloc_always)
 			fprintf (f, "#define D4_OPTS_%d_walloc_always 1\n"
-				    "#define D4_POLICY_%d_walloc 'a'\n"
-				    "#undef d4walloc_always\n"
-				    "#define d4walloc_always d4_%dwalloc\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_walloc 'a'\n"
+						"#undef d4walloc_always\n"
+						"#define d4walloc_always d4_%dwalloc\n",
+						cid, cid, cid);
 		else if (c->wallocf == d4walloc_never)
 			fprintf (f, "#define D4_OPTS_%d_walloc_never 1\n"
-				    "#define D4_POLICY_%d_walloc 'n'\n"
-				    "#undef d4walloc_never\n"
-				    "#define d4walloc_never d4_%dwalloc\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_walloc 'n'\n"
+						"#undef d4walloc_never\n"
+						"#define d4walloc_never d4_%dwalloc\n",
+						cid, cid, cid);
 		else if (c->wallocf == d4walloc_nofetch)
 			fprintf (f, "#define D4_OPTS_%d_walloc_nofetch 1\n"
-				    "#define D4_POLICY_%d_walloc 'f'\n"
-				    "#undef d4walloc_nofetch\n"
-				    "#define d4walloc_nofetch d4_%dwalloc\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_walloc 'f'\n"
+						"#undef d4walloc_nofetch\n"
+						"#define d4walloc_nofetch d4_%dwalloc\n",
+						cid, cid, cid);
 		else
 			fprintf (f, "#undef D4_TRIGGER_%d_wallocf\n"
-				    "#define D4_TRIGGER_%d_wallocf 0\n"
-				    "#define D4_POLICY_%d_walloc 0\n"
-				    "#define d4_%dwalloc D4_CACHE_bogus_wallocf\n",
-				    cid, cid, cid, cid);
+						"#define D4_TRIGGER_%d_wallocf 0\n"
+						"#define D4_POLICY_%d_walloc 0\n"
+						"#define d4_%dwalloc D4_CACHE_bogus_wallocf\n",
+						cid, cid, cid, cid);
 		if (c->wbackf == d4wback_always)
 			fprintf (f, "#define D4_OPTS_%d_wback_always 1\n"
-				    "#define D4_POLICY_%d_wback 'a'\n"
-				    "#undef d4wback_always\n"
-				    "#define d4wback_always d4_%dwback\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_wback 'a'\n"
+						"#undef d4wback_always\n"
+						"#define d4wback_always d4_%dwback\n",
+						cid, cid, cid);
 		else if (c->wbackf == d4wback_never)
 			fprintf (f, "#define D4_OPTS_%d_wback_never 1\n"
-				    "#define D4_POLICY_%d_wback 'n'\n"
-				    "#undef d4wback_never\n"
-				    "#define d4wback_never d4_%dwback\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_wback 'n'\n"
+						"#undef d4wback_never\n"
+						"#define d4wback_never d4_%dwback\n",
+						cid, cid, cid);
 		else if (c->wbackf == d4wback_nofetch)
 			fprintf (f, "#define D4_OPTS_%d_wback_nofetch 1\n"
-				    "#define D4_POLICY_%d_wback 'f'\n"
-				    "#undef d4wback_nofetch\n"
-				    "#define d4wback_nofetch d4_%dwback\n",
-				    cid, cid, cid);
+						"#define D4_POLICY_%d_wback 'f'\n"
+						"#undef d4wback_nofetch\n"
+						"#define d4wback_nofetch d4_%dwback\n",
+						cid, cid, cid);
 		else
 			fprintf (f, "#undef D4_TRIGGER_%d_wbackf\n"
-				    "#define D4_TRIGGER_%d_wbackf 0\n"
-				    "#define D4_POLICY_%d_wback 0\n"
-				    "#define d4_%dwback D4_CACHE_bogus_wbackf\n",
-				    cid, cid, cid, cid);
+						"#define D4_TRIGGER_%d_wbackf 0\n"
+						"#define D4_POLICY_%d_wback 0\n"
+						"#define d4_%dwback D4_CACHE_bogus_wbackf\n",
+						cid, cid, cid, cid);
 
 
 		/*
